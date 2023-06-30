@@ -1,0 +1,237 @@
+---
+title: Analyzing Cyclistic Bike Share Data and Designing a Marketing Strategy for
+  Maximizing Annual Memberships
+author: "Padmashree Ravikiran"
+date: "2023-06-30"
+output: html_document
+---
+##This case study aims to analyze the bike share data provided by Cyclistic, a bike-share program in Chicago. With over 5,800 bicycles and 600 docking stations, Cyclistic offers various types of bikes, including reclining bikes, hand tricycles, and cargo bikes, making it inclusive for people with disabilities and those who cannot use a standard two-wheeled bike. While the majority of riders opt for traditional bikes, approximately 8% of users utilize assistive options. Cyclistic users predominantly ride for leisure, but around 30% use the service for daily work commutes.
+
+### Installing and loading the necessary packages
+```{r}
+
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(janitor)
+```
+### importing the year long data of bikeshare
+```{r}
+may23 <- read.csv("202305-divvy-tripdata.csv")
+apr23 <- read.csv("202304-divvy-tripdata.csv")
+mar23 <- read.csv("202303-divvy-tripdata.csv")
+feb23 <- read.csv("202302-divvy-tripdata.csv")
+jan23 <- read.csv("202301-divvy-tripdata.csv")
+dec22 <- read.csv("202212-divvy-tripdata.csv")
+nov22 <- read.csv("202211-divvy-tripdata.csv")
+oct22 <- read.csv("202210-divvy-tripdata.csv")
+sep22 <- read.csv("202209-divvy-tripdata.csv")
+aug22 <- read.csv("202208-divvy-tripdata.csv")
+jul22 <- read.csv("202207-divvy-tripdata.csv")
+jun22 <- read.csv("202206-divvy-tripdata.csv")
+```
+### importing the year-long data of bikeshare
+```{r}
+tripdata <- rbind(may23, apr23, mar23, feb23, jan23, dec22, nov22, oct22, sep22, aug22, jul22, jun22)
+
+```
+### Clean up and remove duplicates
+```{r}
+tripdata <- na.omit(tripdata)
+tripdata <- distinct(tripdata)
+```
+### Convert to POSIXct format
+```{r}
+tripdata$ended_at <- as.POSIXct(tripdata$ended_at, format = "%Y-%m-%d %H:%M:%S")
+tripdata$started_at <- as.POSIXct(tripdata$started_at, format = "%Y-%m-%d %H:%M:%S")
+```
+### Adding columns for date, month, day, year, day of the week, and ride length
+```{r}
+tripdata$date <- as.Date(tripdata$started_at)
+tripdata$month <- format(as.Date(tripdata$date), "%m")
+tripdata$day <- format(as.Date(tripdata$date), "%d")
+tripdata$year <- format(as.Date(tripdata$date), "%Y")
+tripdata$day_of_week <- format(as.Date(tripdata$date), "%A")
+
+```
+### Identify rows where started_at is not less than ended_at
+```{r}
+rows_to_replace <- tripdata$started_at >= tripdata$ended_at
+
+```
+### Replace the values in started_at with the corresponding values in ended_at
+
+```{r}
+tripdata$started_at[rows_to_replace] <- tripdata$ended_at[rows_to_replace]
+```
+
+### Calculate ride_length in minutes
+```{r}
+tripdata$ride_length <- as.numeric(difftime(tripdata$ended_at, tripdata$started_at, units = "mins"))
+
+```
+### Removing ride_length <= 0
+```{r}
+tripdata_2 <- tripdata[tripdata$ride_length > 0, ]
+```
+
+### Order the day of the week for clean visualization
+```{r}
+tripdata_2$day_of_week <- ordered(tripdata_2$day_of_week, levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+sum(is.na(tripdata_2$ride_length))
+```
+### Basic calculations
+```{r}
+mean(tripdata_2$ride_length, na.rm = TRUE)
+max(tripdata_2$ride_length, na.rm = TRUE)
+```
+### Length of ride by member type mean calculation
+```{r}
+aggregate(tripdata_2$ride_length~tripdata_2$member_casual, FUN = mean)
+
+```
+### Length of ride by member type median
+```{r}
+aggregate(tripdata_2$ride_length~tripdata_2$member_casual, FUN = median)
+```
+### Length of ride by member type max
+```{r}
+aggregate(tripdata_2$ride_length~tripdata_2$member_casual, FUN = max)
+```
+### mean length of ride by member type by day of week
+```{r}
+aggregate(tripdata_2$ride_length~tripdata_2$member_casual+ tripdata_2$day_of_week, FUN = mean)
+
+```
+### maximum length of ride by member type by day of week
+```{r}
+aggregate(tripdata_2$ride_length~tripdata_2$member_casual+ tripdata_2$day_of_week, FUN = max)
+
+```
+##Visualizations
+
+### Total trips by customer type
+```{r}
+tripdata_2 %>% 
+  group_by(member_casual) %>% 
+  summarize(number_of_rides = n()) %>% 
+  arrange(member_casual) %>% 
+  ggplot(aes(x = member_casual, y = number_of_rides, fill = member_casual))+ 
+  labs(title = "Number of trips by customer type") + 
+  geom_col(width= 0.5, position = position_dodge(width= 0.5)) +
+  scale_y_continuous(labels=function(x) format(x, scientific= FALSE))+ 
+  geom_text(aes(label= number_of_rides), vjust= -0.5)
+```
+### Average ride length by customer type
+```{r}
+tripdata_2 %>% 
+  group_by(member_casual) %>% 
+  summarise(average_ride_length = round(mean(ride_length), 3)) %>% 
+  ggplot(aes(x = member_casual, y = average_ride_length, fill = member_casual)) +
+  labs(title = "Average ride length") +
+  geom_col(width = 0.5, position = position_dodge(width = 0.5)) +
+  geom_text(aes(label = average_ride_length), vjust = -0.5)
+```
+### Total trips by customer type by day of the week
+```{r}
+tripdata_2 %>%
+  group_by(member_casual, day_of_week) %>% 
+  summarise(number_of_rides = n()) %>% 
+  arrange(member_casual, day_of_week) %>% 
+  ggplot(aes(x = day_of_week, y = number_of_rides, fill = member_casual))+
+  labs(title = "Total trips by customer type Vs Day of the week")+
+  theme(axis.text.x = element_text(angle = 25))+
+  geom_col(width = 0.5, position = position_dodge(width = 0.5))+
+  scale_y_continuous(labels= function(x) format(x, scientific = FALSE))
+  #geom_text (aes(label = number_of_rides), vjust = -0.5) - labels all the numbers inside the chart
+  
+```
+### Average trips by customer type by day of the week
+```{r}
+tripdata_2 %>%
+  group_by(member_casual, day_of_week) %>% 
+  summarise(average_ride_length = mean(ride_length)) %>% 
+  ggplot(aes(x = day_of_week, y = average_ride_length, fill = member_casual))+
+  labs(title = "Average ride length by customer type Vs Day of the week")+
+  theme(axis.text.x = element_text(angle = 25))+
+  geom_col(width = 0.5, position = position_dodge(width = 0.5))
+```
+### Total rides by month
+```{r}
+tripdata_2 %>% 
+  group_by(member_casual, month) %>% 
+  summarize(number_of_rides = n()) %>% 
+  arrange(member_casual, month) %>% 
+  ggplot(aes(x= month, y = number_of_rides, fill = member_casual))+
+  labs(title = "Total rides by customer type per month")+
+  theme(axis.text.x = element_text(angle = 25))+
+  geom_col(width = 0.5, postion = position_dodge(width = 0.5))+
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE))
+  #geom_text(aes(label = number_of_rides), vjust = 0.5) - inside labels
+```
+### Total ride lengths by month
+```{r}
+tripdata_2 %>% 
+  group_by(member_casual, month) %>% 
+  summarize(ride_length = n()) %>% 
+  arrange(member_casual, month) %>% 
+  ggplot(aes(x= month, y = ride_length, fill = member_casual))+
+  labs(title = "Total ride lengths by customer type per month")+
+  theme(axis.text.x = element_text(angle = 25))+
+  geom_col(width = 0.5, postion = position_dodge(width = 0.5))+
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE))
+```
+
+#Based on the updated analysis of the bike data, here are the revised takeaways and recommendations:
+
+##Takeaways:
+
+Ride Length by Member Type:
+
+The mean ride length for casual members is 20.78 minutes, while for members, it is 12.15 minutes. This indicates that casual members have longer rides on average.
+The median ride length for casual members is 12.22 minutes, while for members, it is 8.62 minutes. This suggests that casual members also tend to have longer rides in the middle range.
+The maximum ride length for casual members is 32,035.45 minutes, while for members, it is 1,499.93 minutes. Casual members occasionally have extremely long rides compared to members.
+Ride Length by Member Type and Day of Week:
+
+On Sundays, both casual and member riders have longer average ride lengths compared to other days of the week. This could indicate a higher demand for bike usage on weekends.
+Casual members have higher average ride lengths than members across all days of the week, suggesting that casual riders generally take longer trips regardless of the day.
+Maximum Ride Length by Member Type and Day of Week:
+
+The maximum ride length varies across member types and days of the week, with significant differences observed. Casual members have occasional extreme ride lengths, especially on Sundays and Mondays.
+Overall Patterns:
+
+Casual members tend to have longer ride lengths compared to members, based on both mean and median values.
+Sundays and Mondays exhibit higher ride lengths for both casual and member riders, suggesting a potential pattern of increased bike usage on these days.
+Recommendations:
+
+Marketing and Promotions:
+
+Target casual members with promotions and incentives to encourage longer rides and increase their engagement. Highlight the benefits of a membership for frequent riders.
+Offer discounted membership fees for the first year to incentivize casual riders to consider a membership, emphasizing the cost-saving potential.
+Operational Considerations:
+
+Allocate additional resources, such as bikes and docking stations, on Sundays and Mondays to accommodate the higher ride demand observed on these days.
+Consider offering a seasonal membership option for casual riders who primarily use bikes during the summer months. This can attract more riders and boost overall bike usage.
+User Experience:
+
+Introduce a weekday membership option to convert casual riders to members. This can specifically target individuals who regularly use bikes for commuting or weekday activities, promoting long-term bike usage.
+Enhance the user experience by improving bike availability, ensuring well-maintained bikes, and providing user-friendly tools for trip planning and finding available docking stations.
+These recommendations aim to encourage more frequent and longer rides by casual members, attract new members, and optimize the bike share program's operations based on the observed usage patterns.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
